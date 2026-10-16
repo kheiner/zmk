@@ -23,7 +23,7 @@ uint8_t zmk_battery_state_of_charge(void);
 // Sample now instead of waiting for the next report interval.
 void zmk_battery_update_now(void);
 
-#if IS_ENABLED(CONFIG_ZMK_BATTERY_CHARGE_STATUS)
+#if IS_ENABLED(CONFIG_ZMK_BATTERY_CHARGE_STATUS) || IS_ENABLED(CONFIG_ZMK_BATTERY_CHARGE_USB_PROXY)
 
 enum zmk_battery_charge_state zmk_battery_charge_state(void);
 

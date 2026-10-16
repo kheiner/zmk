@@ -407,11 +407,6 @@ config ZMK_BATTERY_REPORTING_USB
     bool "Report Battery Level over USB HID"
     depends on ZMK_USB
 
-config ZMK_BATTERY_CHARGE_STATUS
-    bool "Report whether the battery is charging"
-    default y
-    depends on DT_HAS_ZMK_BATTERY_CHARGE_STATUS_ENABLED
-    select BT_BAS_BLS if BT_BAS
 config ZMK_BATTERY_CHARGE_USB_PROXY
     bool "Report USB power as charging (no charger status pin)"
     depends on ZMK_BATTERY_REPORTING
@@ -420,8 +415,13 @@ config ZMK_BATTERY_CHARGE_USB_PROXY
       Uses the USB connection state as the charge status: while bus power is
       plugged in the battery is reported as charging, otherwise as unknown.
       This is a proxy, not real charger status: bus power stays asserted after
-      the battery is full, as the charger-status option's help text notes.
+      the battery is full, which is why the charger-status option exists.
 
+config ZMK_BATTERY_CHARGE_STATUS
+    bool "Report whether the battery is charging"
+    default y
+    depends on DT_HAS_ZMK_BATTERY_CHARGE_STATUS_ENABLED
+    select BT_BAS_BLS if BT_BAS
     help
       Reads the status output of the board's battery charger to report whether
       the battery is charging, using the zmk,battery-charge-status devicetree
