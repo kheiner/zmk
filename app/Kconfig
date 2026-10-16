@@ -410,6 +410,7 @@ config ZMK_BATTERY_REPORTING_USB
 config ZMK_BATTERY_CHARGE_USB_PROXY
     bool "Report USB power as charging (no charger status pin)"
     depends on ZMK_BATTERY_REPORTING
+    depends on USB_DEVICE_STACK
     depends on !DT_HAS_ZMK_BATTERY_CHARGE_STATUS_ENABLED
     help
       Uses the USB connection state as the charge status: while bus power is

@@ -93,9 +93,10 @@ static ssize_t read_blvl(struct bt_conn *conn, const struct bt_gatt_attr *attr, 
 }
 
 // Expose Battery Level Status (charge state) per part whenever a charge state can be known: from this
-// device's own charger, or fetched from the peripherals (e.g. a dongle without a battery).
+// device's own charger or USB-bus proxy, or fetched from the peripherals (e.g. a dongle without a battery).
 #define BAS_HAS_BLS                                                                                \
     (IS_ENABLED(CONFIG_ZMK_BATTERY_CHARGE_STATUS) ||                                               \
+     IS_ENABLED(CONFIG_ZMK_BATTERY_CHARGE_USB_PROXY) ||                                            \
      IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_CHARGE_STATE_FETCHING))
 
 #if BAS_HAS_BLS
