@@ -61,6 +61,8 @@ struct peripheral_slot {
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_CHARGE_STATE_FETCHING)
     struct bt_gatt_subscribe_params batt_lvl_status_subscribe_params;
     enum zmk_battery_charge_state charge_state;
+    bool batt_lvl_status_subscribe_pending;
+    struct bt_gatt_read_params batt_lvl_status_read_params;
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_CHARGE_STATE_FETCHING) */
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_PERIPHERAL_HID_INDICATORS)
     uint16_t update_hid_indicators;
@@ -581,6 +583,65 @@ static int split_central_subscribe(struct bt_conn *conn, struct bt_gatt_subscrib
     return err;
 }
 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_CHARGE_STATE_FETCHING)
+// Subscribing to battery level status in the middle of the characteristic walk collides with the battery
+// level subscription's own CCC discovery (-EBUSY), so the charge state never arrives. Subscribe later.
+#define BLS_SUBSCRIBE_DELAY_MS 500
+
+// Notifications only report changes, so also read the current value once subscribed.
+static uint8_t batt_lvl_status_read_func(struct bt_conn *conn, uint8_t err,
+                                         struct bt_gatt_read_params *params, const void *data,
+                                         uint16_t length) {
+    if (err || !data) {
+        return BT_GATT_ITER_STOP;
+    }
+
+    struct peripheral_slot *slot = peripheral_slot_for_conn(conn);
+    if (slot) {
+        split_central_battery_level_status_notify_func(conn, &slot->batt_lvl_status_subscribe_params,
+                                                       data, length);
+    }
+    return BT_GATT_ITER_STOP;
+}
+
+static void batt_lvl_status_subscribe_work_handler(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(batt_lvl_status_subscribe_work,
+                               batt_lvl_status_subscribe_work_handler);
+
+static void batt_lvl_status_subscribe_work_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+    bool retry = false;
+
+    for (int i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
+        struct peripheral_slot *slot = &peripherals[i];
+        if (!slot->batt_lvl_status_subscribe_pending) {
+            continue;
+        }
+        if (slot->conn == NULL || slot->state != PERIPHERAL_SLOT_STATE_CONNECTED) {
+            slot->batt_lvl_status_subscribe_pending = false;
+            continue;
+        }
+
+        int err = split_central_subscribe(slot->conn, &slot->batt_lvl_status_subscribe_params);
+        if (err == -EBUSY) {
+            retry = true;
+        } else {
+            slot->batt_lvl_status_subscribe_pending = false;
+            slot->batt_lvl_status_read_params.func = batt_lvl_status_read_func;
+            slot->batt_lvl_status_read_params.handle_count = 1;
+            slot->batt_lvl_status_read_params.single.handle =
+                slot->batt_lvl_status_subscribe_params.value_handle;
+            slot->batt_lvl_status_read_params.single.offset = 0;
+            bt_gatt_read(slot->conn, &slot->batt_lvl_status_read_params);
+        }
+    }
+
+    if (retry) {
+        k_work_reschedule(&batt_lvl_status_subscribe_work, K_MSEC(BLS_SUBSCRIBE_DELAY_MS));
+    }
+}
+#endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_CHARGE_STATE_FETCHING) */
+
 static int update_peripheral_selected_layout(struct peripheral_slot *slot, uint8_t layout_idx) {
     if (slot->state != PERIPHERAL_SLOT_STATE_CONNECTED) {
         return -ENOTCONN;
@@ -734,7 +795,8 @@ static uint8_t split_central_chrc_discovery_func(struct bt_conn *conn,
                 split_central_battery_level_status_notify_func;
             // The characteristic is indicated rather than notified.
             slot->batt_lvl_status_subscribe_params.value = BT_GATT_CCC_INDICATE;
-            split_central_subscribe(conn, &slot->batt_lvl_status_subscribe_params);
+            slot->batt_lvl_status_subscribe_pending = true;
+            k_work_reschedule(&batt_lvl_status_subscribe_work, K_MSEC(BLS_SUBSCRIBE_DELAY_MS));
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_CHARGE_STATE_FETCHING) */
         }
         break;
