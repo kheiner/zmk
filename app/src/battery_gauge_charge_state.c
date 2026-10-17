@@ -30,7 +30,8 @@ enum zmk_battery_charge_state zmk_battery_charge_state(void) {
         return ZMK_BATTERY_CHARGE_STATE_UNKNOWN;
     }
 
-    int ma = avg.val1;
+    // The gauge reports whole amps in val1 and the remainder in val2; convert to mA.
+    int ma = sensor_value_to_milli(&avg);
 
     return (ma <= -GAUGE_CURRENT_THRESHOLD_MA) ? ZMK_BATTERY_CHARGE_STATE_DISCHARGING
            : (ma >= GAUGE_CURRENT_THRESHOLD_MA) ? ZMK_BATTERY_CHARGE_STATE_CHARGING
